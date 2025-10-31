@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>All Transactions - Anuada Savings</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- SweetAlert CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen p-4">
+  <div class="max-w-2xl mx-auto">
+    <!-- Header -->
+    <div class="bg-white rounded-xl shadow-sm p-4 mb-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-xl font-bold text-gray-800 flex items-center">
+            <i class="fas fa-list text-blue-600 mr-3"></i>
+            All Transactions
+          </h1>
+          <p class="text-gray-600 text-sm mt-1">Complete transaction history</p>
+        </div>
+        <a href="dashboard.html" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center text-sm">
+          <i class="fas fa-arrow-left mr-2"></i>
+          Back
+        </a>
+      </div>
+    </div>
+
+    <!-- Mobile-Optimized Transactions List -->
+    <div class="space-y-3" id="transactionsContainer">
+      <!-- Loading State -->
+      <div class="text-center py-8">
+        <i class="fas fa-spinner fa-spin text-blue-500 text-xl mb-2"></i>
+        <p class="text-gray-500">Loading transactions...</p>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
+    import { getFirestore, collection, query, where, getDocs, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDHPjJtGjW2E-cCoJ56r4IkfYcJ1oX6yyc",
+      authDomain: "apps-57140.firebaseapp.com",
+      projectId: "apps-57140",
+      storageBucket: "apps-57140.firebasestorage.app",
+      messagingSenderId: "548004749500",
+      appId: "1:548004749500:web:968809052a36f9ad45b0b9",
+      measurementId: "G-GNQP4SG9ZH"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    let currentUser = null;
+
+    // Check Auth
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        await Swal.fire({
+          icon: 'warning',
+          title: 'Authentication Required',
+          text: 'Please log in to view your transactions.',
+          confirmButtonText: 'Go to Login',
+          confirmButtonColor: '#2563eb'
+        });
+        window.location.href = "index.html";
+        return;
+      }
+      currentUser = user;
+      await loadAllTransactions(user.uid);
+    });
+
+    // Load All Transactions
+    async function loadAllTransactions(userId) {
+      const transactionsContainer = document.getElementById('transactionsContainer');
+      transactionsContainer.innerHTML = `
+        <div class="text-center py-8">
+          <i class="fas fa-spinner fa-spin text-blue-500 text-xl mb-2"></i>
+          <p class="text-gray-500">Loading transactions...</p>
+        </div>
+      `;
+
+      const q = query(
+        collection(db, "savings"),
+        where("userId", "==", userId)
+      );
+
+      try {
+        const querySnapshot = await getDocs(q);
+        let html = "";
+
+        if (querySnapshot.empty) {
+          html = `
+            <div class="text-center py-12">
+              <i class="fas fa-receipt text-gray-300 text-4xl mb-3"></i>
+              <p class="text-gray-500 text-lg">No transactions yet</p>
+              <p class="text-gray-400 text-sm mt-1">Your transaction history will appear here</p>
+            </div>
+          `;
+        } else {
+          const transactions = [];
+          querySnapshot.forEach((docSnap) => {
+            transactions.push({ id: docSnap.id, ...docSnap.data() });
+          });
+
+          // Sort by date (newest first)
+          transactions.sort((a, b) => {
+            const getTimestamp = (transaction) => {
+              if (transaction.timestamp?.seconds) {
+                return transaction.timestamp.seconds * 1000;
+              } else if (transaction.date?.seconds) {
+                return transaction.date.seconds * 1000;
+              } else if (transaction.date) {
+                return new Date(transaction.date).getTime();
+              }
+              return 0;
+            };
+            return getTimestamp(b) - getTimestamp(a);
+          });
+
+          transactions.forEach((transaction) => {
+            const amount = transaction.amount || 0;
+            const type = transaction.type || "unknown";
+            let date = "No date";
+            
+            try {
+              if (transaction.timestamp?.seconds) {
+                date = new Date(transaction.timestamp.seconds * 1000).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                });
+              } else if (transaction.date?.seconds) {
+                date = new Date(transaction.date.seconds * 1000).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                });
+              } else if (transaction.date) {
+                date = new Date(transaction.date).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                });
+              }
+            } catch (dateError) {
+              console.error("Error parsing date:", dateError);
+            }
+
+            html += `
+              <div class="bg-white rounded-lg shadow-sm p-4 border-l-4 ${type === "deposit" ? "border-green-500" : "border-red-500"}">
+                <div class="flex justify-between items-start mb-2">
+                  <div class="flex-1">
+                    <div class="flex items-center mb-1">
+                      <div class="w-8 h-8 rounded-full ${type === "deposit" ? "bg-green-100" : "bg-red-100"} flex items-center justify-center mr-3">
+                        <i class="fas ${type === "deposit" ? "fa-arrow-down text-green-600" : "fa-arrow-up text-red-600"} text-xs"></i>
+                      </div>
+                      <div>
+                        <span class="font-semibold text-gray-800 text-sm capitalize">${type}</span>
+                        <span class="${type === "deposit" ? "text-green-600" : "text-red-600"} font-bold text-sm ml-2">
+                          ${type === "deposit" ? "+" : "-"}₱${amount.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                    <div class="text-xs text-gray-500 ml-11">
+                      <div class="flex justify-between">
+                        <span class="truncate mr-2">${transaction.email}</span>
+                        <span class="whitespace-nowrap">${date}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="flex justify-end space-x-2 mt-2">
+                  <button onclick="editTransaction('${transaction.id}', ${amount}, '${type}')" 
+                          class="text-blue-600 hover:text-blue-800 text-xs font-medium px-3 py-1 rounded border border-blue-300 hover:bg-blue-50 transition-colors">
+                    <i class="fas fa-edit mr-1"></i>Edit
+                  </button>
+                  <button onclick="deleteTransaction('${transaction.id}', ${amount}, '${type}')" 
+                          class="text-red-600 hover:text-red-800 text-xs font-medium px-3 py-1 rounded border border-red-300 hover:bg-red-50 transition-colors">
+                    <i class="fas fa-trash mr-1"></i>Delete
+                  </button>
+                </div>
+              </div>
+            `;
+          });
+        }
+
+        transactionsContainer.innerHTML = html;
+
+      } catch (error) {
+        console.error("Error loading transactions:", error);
+        transactionsContainer.innerHTML = `
+          <div class="text-center py-8">
+            <i class="fas fa-exclamation-triangle text-yellow-500 text-3xl mb-3"></i>
+            <p class="text-gray-700">Unable to load transactions</p>
+            <p class="text-gray-500 text-sm mt-1">Please check your connection and try again</p>
+            <button onclick="loadAllTransactions('${currentUser.uid}')" class="mt-3 text-blue-600 hover:text-blue-800 text-sm">
+              <i class="fas fa-redo mr-1"></i> Try Again
+            </button>
+          </div>
+        `;
+      }
+    }
+
+    // Edit Transaction with SweetAlert
+    window.editTransaction = async (id, oldAmount, type) => {
+      const { value: newAmount } = await Swal.fire({
+        title: `Edit ${type.charAt(0).toUpperCase() + type.slice(1)}`,
+        html: `
+          <div class="text-left">
+            <p class="text-gray-600 mb-4">Update the transaction amount:</p>
+            <div class="bg-${type === 'deposit' ? 'green' : 'red'}-50 border border-${type === 'deposit' ? 'green' : 'red'}-200 rounded-lg p-3 mb-4">
+              <p class="text-sm text-${type === 'deposit' ? 'green' : 'red'}-700 font-semibold">Current: ₱${oldAmount.toFixed(2)}</p>
+            </div>
+          </div>
+        `,
+        input: 'number',
+        inputLabel: 'New Amount (₱)',
+        inputValue: oldAmount,
+        showCancelButton: true,
+        confirmButtonText: 'Update Transaction',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#2563eb',
+        inputAttributes: { 
+          min: 0.01, 
+          step: 0.01,
+          placeholder: 'Enter amount...'
+        },
+        inputValidator: (value) => {
+          if (!value || value <= 0) {
+            return 'Please enter a valid amount greater than 0';
+          }
+        }
+      });
+
+      if (newAmount !== undefined && newAmount !== null && !isNaN(newAmount)) {
+        try {
+          await updateDoc(doc(db, "savings", id), { 
+            amount: parseFloat(newAmount) 
+          });
+          
+          await Swal.fire({
+            icon: 'success',
+            title: 'Transaction Updated',
+            text: `Successfully updated to ₱${parseFloat(newAmount).toFixed(2)}`,
+            confirmButtonColor: '#2563eb',
+            timer: 2000
+          });
+          
+          await loadAllTransactions(currentUser.uid);
+        } catch (error) {
+          await Swal.fire({
+            icon: 'error',
+            title: 'Update Failed',
+            text: 'Unable to update transaction. Please try again.',
+            confirmButtonColor: '#dc2626'
+          });
+        }
+      }
+    };
+
+    // Delete Transaction with SweetAlert
+    window.deleteTransaction = async (id, amount, type) => {
+      const result = await Swal.fire({
+        title: 'Delete Transaction?',
+        html: `
+          <div class="text-left">
+            <p class="text-gray-600 mb-3">This action cannot be undone. The following transaction will be permanently removed:</p>
+            <div class="bg-${type === 'deposit' ? 'red' : 'red'}-50 border border-${type === 'deposit' ? 'red' : 'red'}-200 rounded-lg p-3">
+              <p class="text-sm font-semibold text-${type === 'deposit' ? 'red' : 'red'}-700 capitalize">${type}: ₱${amount.toFixed(2)}</p>
+            </div>
+          </div>
+        `,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, Delete',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#dc2626',
+        cancelButtonColor: '#6b7280',
+        reverseButtons: true
+      });
+
+      if (result.isConfirmed) {
+        try {
+          await deleteDoc(doc(db, "savings", id));
+          
+          await Swal.fire({
+            icon: 'success',
+            title: 'Transaction Deleted',
+            text: 'The transaction has been successfully deleted.',
+            confirmButtonColor: '#2563eb',
+            timer: 2000
+          });
+          
+          await loadAllTransactions(currentUser.uid);
+        } catch (error) {
+          await Swal.fire({
+            icon: 'error',
+            title: 'Delete Failed',
+            text: 'Unable to delete transaction. Please try again.',
+            confirmButtonColor: '#dc2626'
+          });
+        }
+      }
+    };
+
+    // Make loadAllTransactions globally available for retry button
+    window.loadAllTransactions = loadAllTransactions;
+  </script>
+</body>
+</html>
