@@ -2,15 +2,15 @@ self.addEventListener('install', (event) => {
     event.waitUntil(
       caches.open('savings-cache-v1').then((cache) => {
         return cache.addAll([
-          '/',
-          '/index.html',
-          '/manifest.json',
-          '/icons/savings.png',
-          '/icons/savings.png'
+          './',
+          './index.html',
+          './manifest.json',
+          './icons/savings.png',
+          './icons/savings.png'
         ]);
       })
     );
-    console.log('Service Worker installed ✅');
+    console.log('✅ Service Worker installed');
   });
   
   self.addEventListener('fetch', (event) => {
