@@ -1,6 +1,6 @@
 {
-  "name": "Savings App",
-  "short_name": "Savings",
+  "name": "Anuada Savings",
+  "short_name": "Anuada",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#ffffff",
