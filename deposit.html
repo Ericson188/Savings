@@ -71,6 +71,18 @@
           </div>
         </div>
 
+        <!-- Name Dropdown -->
+        <div class="mb-6">
+          <label for="name" class="block text-sm font-medium text-gray-700">Name</label>
+          <select id="name" name="name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" required>
+            <option value="">Select a name</option>
+            <option value="Ericson">Ericson</option>
+            <option value="Erneloyd">Erneloyd</option>
+            <option value="Ernelito">Ernelito</option>
+            <option value="Ernel">Ernel</option>
+          </select>
+        </div>
+        
         <!-- Submit Button -->
         <button 
           id="depositBtn" 
@@ -119,7 +131,7 @@
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
     import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
-    // ✅ Your Firebase Config
+    // ✅ Firebase Config
     const firebaseConfig = {
       apiKey: "AIzaSyDHPjJtGjW2E-cCoJ56r4IkfYcJ1oX6yyc",
       authDomain: "apps-57140.firebaseapp.com",
@@ -137,13 +149,14 @@
 
     // Elements
     const amountInput = document.getElementById("amountInput");
+    const nameSelect = document.getElementById("name");
     const depositBtn = document.getElementById("depositBtn");
     const depositForm = document.getElementById("depositForm");
     const loadingOverlay = document.getElementById("loadingOverlay");
 
     let currentUser = null;
 
-    // ✅ Check user authentication
+    // ✅ Check authentication
     onAuthStateChanged(auth, (user) => {
       if (user) {
         currentUser = user;
@@ -155,52 +168,52 @@
       }
     });
 
-    // ✅ Quick amount function
+    // ✅ Quick amount button
     window.setAmount = (amount) => {
       amountInput.value = amount;
       amountInput.focus();
     };
 
-    // ✅ Show notification function
+    // ✅ Notification function
     function showNotification(message, type = 'info') {
-      // Remove existing notifications
       const existingNotification = document.querySelector('.custom-notification');
-      if (existingNotification) {
-        existingNotification.remove();
-      }
+      if (existingNotification) existingNotification.remove();
 
       const notification = document.createElement('div');
       notification.className = `custom-notification fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 transform transition-transform duration-300 ${
-        type === 'error' ? 'bg-red-500 text-white' : 
-        type === 'success' ? 'bg-green-500 text-white' : 
-        'bg-blue-500 text-white'
+        type === 'error' ? 'bg-red-500 text-white' :
+        type === 'success' ? 'bg-green-500 text-white' : 'bg-blue-500 text-white'
       }`;
-      
+
       notification.innerHTML = `
         <div class="flex items-center">
           <i class="fas ${
-            type === 'error' ? 'fa-exclamation-triangle' : 
-            type === 'success' ? 'fa-check-circle' : 
-            'fa-info-circle'
+            type === 'error' ? 'fa-exclamation-triangle' :
+            type === 'success' ? 'fa-check-circle' : 'fa-info-circle'
           } mr-2"></i>
           <span>${message}</span>
         </div>
       `;
-      
       document.body.appendChild(notification);
-      
-      // Auto remove after 5 seconds
+
       setTimeout(() => {
         notification.style.transform = 'translateX(100%)';
         setTimeout(() => notification.remove(), 300);
       }, 5000);
     }
 
-    // ✅ Handle Deposit Form Submission
+    // ✅ Handle Deposit Submission
     depositForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       
       const amount = parseFloat(amountInput.value);
+      const selectedName = nameSelect.value;
+
+      if (!selectedName) {
+        showNotification('Please select a name', 'error');
+        nameSelect.focus();
+        return;
+      }
 
       if (!amount || amount <= 0) {
         showNotification('Please enter a valid amount', 'error');
@@ -219,30 +232,27 @@
         return;
       }
 
-      // Show loading state
       loadingOverlay.classList.remove('hidden');
       depositBtn.disabled = true;
       depositBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Processing...';
 
       try {
-        // Add deposit record to Firestore
         await addDoc(collection(db, "savings"), {
           userId: currentUser.uid,
           email: currentUser.email,
+          name: selectedName,
           amount: amount,
           type: "deposit",
           timestamp: serverTimestamp(),
           date: serverTimestamp()
         });
 
-        // Show success message
         loadingOverlay.classList.add('hidden');
-        showNotification(`Successfully deposited ₱${amount.toFixed(2)}!`, 'success');
+        showNotification(`Successfully deposited ₱${amount.toFixed(2)} for ${selectedName}!`, 'success');
         
-        // Reset form
         amountInput.value = "";
-        
-        // Redirect after short delay
+        nameSelect.value = "";
+
         setTimeout(() => {
           window.location.href = "fetchdata.html";
         }, 2000);
@@ -257,7 +267,6 @@
       }
     });
 
-    // Focus amount input on page load
     amountInput.focus();
   </script>
 </body>
